@@ -25,16 +25,8 @@ instance IsString Component where fromString = Component . fromString
 instance Additive Component where (+) = Or
 instance Multiplicative Component where (*) = And
 
-instance (Semiring a, Real a) => RightModule a Component where
-  (Equals a _) *. n = Equals a $ toRational n
-  a *. n = Equals a $ toRational n
-instance (Semiring a, Real a) => LeftModule a Component where (.*) = flip (*.)
-
 instance Monoidal Component where zero = Never
 instance   Unital Component where  one = Always
-
-instance Abelian Component
-instance Semiring Component
 
 instance Semigroup Component where (<>) = (*)
 instance Monoid Component where

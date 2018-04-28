@@ -3,14 +3,15 @@
 module Control.Monad.Refinement.Class where
 
 import Control.Applicative
-import Control.Monad.Refinement.Orphans()
-import Numeric.Algebra hiding ((>))
-import Prelude hiding ((+), (*), negate, minimum, maximum)
+import Prelude hiding (minimum, maximum, negate, (+), (*))
 
 infixr 5 |.
 infixr 6 &.
 infix 8 <., >., =., >=., <=.
 infixr 1 ==>
+
+infixl 6 +
+infixl 7 *
 
 -- | A Product that is unrefined and a strategy to refine it form a Monoid
 class Product a where
@@ -22,6 +23,22 @@ class Product a where
 
   perturbate :: Multiplicative a => a -> a -> a
   perturbate = (*)
+
+class Monoidal a where
+  zero :: a
+
+class Unital a where
+  one :: a
+
+class Multiplicative a where
+  (*) :: a -> a -> a
+
+class Additive a where
+  (+) :: a -> a -> a
+
+class Group a where
+  negate :: a -> a
+
 
 -- | Logical operators in propositional algebra
 (&.) :: Multiplicative c => c -> c -> c
@@ -50,24 +67,23 @@ class Quantifiable c where
   minimum _ = Nothing
   maximum  :: c -> Maybe (c, Rational)
   maximum _ = Nothing
-  (=.) :: RightModule Rational c => c -> Rational -> c
-  a =. n = a *. n
-  (>.) :: RightModule Rational c => c -> Rational -> c
+  (=.) :: c -> Rational -> c
+  (>.) :: c -> Rational -> c
   (>.) = (=.)
-  (<.) :: RightModule Rational c => c -> Rational -> c
+  (<.) :: c -> Rational -> c
   (<.) = (=.)
 
-(<=.) :: (RightModule Rational c, Quantifiable c) => c -> Rational -> c
+(<=.) :: (Additive c, Quantifiable c) => c -> Rational -> c
 a <=. n = a <. n + a =. n
-(>=.) :: (RightModule Rational c, Quantifiable c) => c -> Rational -> c
+(>=.) :: (Additive c, Quantifiable c) => c -> Rational -> c
 a >=. n = a >. n + a =. n
 
-equivalent :: (Eq c, Group c, Unital c, Quantifiable c, Propositional c) => c -> c -> Bool
+equivalent :: (Eq c, Group c, Monoidal c, Unital c, Quantifiable c, Propositional c) => c -> c -> Bool
 equivalent x y = sufficient x y && sufficient y x
 
 -- | sufficient (e <== x)
 -- DNF
-sufficient :: (Eq c, Group c, Unital c, Quantifiable c, Propositional c) => c -> c -> Bool
+sufficient :: (Eq c, Group c, Monoidal c, Unital c, Quantifiable c, Propositional c) => c -> c -> Bool
 
 sufficient _ x | x == zero = True
 sufficient e _ | e == one = True
@@ -144,7 +160,7 @@ sufficient e x = e == x
 
 
 replace
-  :: (Eq c, Multiplicative c, RightModule Rational c, Group c, Propositional c, Quantifiable c)
+  :: (Eq c, Additive c, Multiplicative c, Group c, Propositional c, Quantifiable c)
   => c -> c -> c -> c
 replace x y c | Just (a, b) <- conjunction c = replace x y a * replace x y b
 replace x y c | Just (a, b) <- disjunction c = replace x y a + replace x y b

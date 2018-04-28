@@ -5,6 +5,7 @@ module XC70 where
 import Refinement
 import Data.Foldable (forM_)
 import Prelude hiding (product, (+), (*))
+import qualified Prelude as Num
 
 
 xc70 :: Refinement Car Component ()
@@ -54,15 +55,12 @@ instance Product Car
 
 instance Additive Car where
   a + b = Car
-    { fixedPrice = fixedPrice a + fixedPrice b
+    { fixedPrice = fixedPrice a Num.+ fixedPrice b
     , available = available a <> available b
     , suggest = suggest a . suggest b
     }
 
 instance Multiplicative Car where (*) = const
-
-instance RightModule Natural Car where (*.) = const
-instance LeftModule Natural Car where (.*) = flip (*.)
 
 instance Monoidal Car where
   zero = Car
@@ -70,9 +68,6 @@ instance Monoidal Car where
     , available = mempty
     , suggest = id
     }
-
-instance Abelian Car
-instance Semiring Car
 
 instance Semigroup Car where (<>) = (+)
 instance Monoid Car where
@@ -92,7 +87,7 @@ instance Monoid Availability where
   mempty = Series
   mappend = (<>)
 
-data Component = Null
+data Component = Null | One
   | Kinetic | Momentum | Summum
   | BusinessPro
   | O Int
@@ -105,15 +100,8 @@ data Component = Null
 instance Additive Component where (+) = Or
 instance Multiplicative Component where (*) = And
 
-instance (Semiring a, Real a) => RightModule a Component where
-  (Equals a _) *. n = Equals a $ toRational n
-  a *. n = Equals a $ toRational n
-instance (Semiring a, Real a) => LeftModule a Component where (.*) = flip (*.)
-
 instance Monoidal Component where zero = Null
-
-instance Abelian Component
-instance Semiring Component
+instance Unital Component where one = One 
 
 instance Semigroup Component where (<>) = (*)
 instance Monoid Component where
@@ -137,6 +125,7 @@ instance Propositional Component where
 instance Quantifiable Component where
   equation (Equals a n) = Just (a, n)
   equation _ = Nothing
+  c =. r = Equals c r
 
 instance Letter Component where
   letter c | Just (a,_) <- conjunction c = letter a

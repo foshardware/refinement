@@ -45,9 +45,6 @@ instance Multiplicative PC where
     , suggest = undefined
     }
 
-instance RightModule Natural PC where (*.) = const
-instance LeftModule Natural PC where (.*) = flip (*.)
-
 instance Monoidal PC where
   zero = PC
     { price = zero
@@ -55,9 +52,6 @@ instance Monoidal PC where
     , available = True
     , suggest = id
     }
-
-instance Abelian PC
-instance Semiring PC
 
 instance Semigroup PC where (<>) = (+)
 instance Monoid PC where

@@ -20,7 +20,6 @@ import qualified Data.IntMap as I
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Semigroup
-import Numeric.Algebra
 import Prelude hiding ((+), (*), negate, minimum, maximum, lookup)
 
 -- | To map a category of unrefined products to a category of refined products:
@@ -44,22 +43,33 @@ evalRefinementT :: (Ord c, Functor m) => RefinementT p c m a -> m a
 evalRefinementT (RefinementT f) = fst <$> f (0, mempty)
 
 refinement ::
-  ( Propositional c, Quantifiable c, Letter c, Unital c, Group c, Ord c
-  , Monoidal p, Multiplicative p
+  ( Propositional c, Quantifiable c, Letter c
+  , Monoidal c, Unital c
+  , Additive c, Multiplicative c
+  , Group c, Ord c
+  , Monoidal p, Additive p, Multiplicative p
   ) => Refinement p c () -> c -> p
 refinement x = copoint . refinementT x . reduce . toDNF
 
 refinementT ::
-  ( Group c, Unital c, Propositional c, Quantifiable c, Letter c, Ord c
-  , Monoidal p, Multiplicative p, Monad m
+  ( Ord c, Group c
+  , Monoidal c, Unital c
+  , Additive c, Multiplicative c
+  , Propositional c, Quantifiable c, Letter c
+  , Monoidal p, Multiplicative p, Additive p
+  , Monad m
   ) => RefinementT p c m () -> c -> m p
 refinementT (RefinementT f) uc = do
   ~(_, (_, ma)) <- f (0, mempty)
   pure . foldr1 (*) $ refinementA ma <$> disjunctions uc
 
-refinementA
-  :: (Ord c, Group c, Unital c, Propositional c, Quantifiable c, Letter c, Monoidal p)
-  => RuleMap c p -> c -> p
+refinementA ::
+  ( Ord c, Group c
+  , Monoidal c, Unital c
+  , Additive c, Multiplicative c
+  , Propositional c, Quantifiable c, Letter c
+  , Additive p, Monoidal p
+  ) => RuleMap c p -> c -> p
 refinementA ma c
   | c == zero
   = foldr (\(_, a) b -> a + b) zero
@@ -72,9 +82,13 @@ refinementA ma c
   g (MinTerm xs, a) b | foldr (\e v -> v && sufficient e c) True xs = a + b
   g _ b = b
 
-rule
-  :: (Propositional c, Letter c, Unital c, Ord c, Group c, Monad m, Additive p)
-  => p -> c -> RefinementT p c m ()
+rule ::
+  ( Propositional c, Letter c
+  , Monoidal c, Unital c
+  , Additive c, Multiplicative c
+  , Ord c, Group c
+  , Monad m, Additive p
+  ) => p -> c -> RefinementT p c m ()
 rule p = ruleDNF p . reduce . toDNF
 
 ruleDNF
@@ -82,9 +96,13 @@ ruleDNF
   => p -> c -> RefinementT p c m ()
 ruleDNF = flip constraintDNF
 
-constraint
-  :: (Propositional c, Letter c, Unital c, Ord c, Group c, Monad m, Additive p)
-  => c -> p -> RefinementT p c m ()
+constraint ::
+  ( Propositional c, Letter c
+  , Monoidal c, Unital c
+  , Additive c, Multiplicative c
+  , Ord c, Group c
+  , Monad m, Additive p
+  ) => c -> p -> RefinementT p c m ()
 constraint = flip rule
 
 -- | Only rules with given component-algebra in DNF are fully effective

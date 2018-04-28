@@ -18,14 +18,14 @@ import Data.Vector (length, thaw, unsafeFreeze, unsafeIndex, ifoldl')
 import Data.Vector.Mutable (unsafeRead, unsafeWrite)
 import Data.Set as Set hiding (foldl')
 import Data.STRef
-import Numeric.Algebra hiding ((\\), sum, (<))
-import Prelude as List hiding ((+), (*), (-), (>), negate, length)
+import Prelude as List hiding ((+), (*), negate, length)
+import qualified Prelude as Num 
 
 import Data.BitMatrix
 
 
 toDNF = t
-toDNF, t :: (Eq c, Multiplicative c, Group c, Propositional c) => c -> c
+toDNF, t :: (Eq c, Additive c, Multiplicative c, Group c, Propositional c) => c -> c
 
 t c | Just (a, b) <- implication =<< negation c = t $ a * negate b
 t c | Just (a, b) <- implication c = t (negate a) + t b
@@ -74,11 +74,13 @@ t c = c
 
 -- | Note on complexity: Size of minterms considered as constant
 --
-reduce :: (Ord c, Group c, Unital c, Propositional c) => c -> c
+reduce
+  :: (Ord c, Group c, Monoidal c, Unital c, Additive c, Multiplicative c, Propositional c)
+  => c -> c
 reduce c = fromSetsDNF $ eliminate (toSetsDNF c) $ resolve (toSetsDNF c) mempty
 
 -- | O(ms*log(ms))
-toSetsDNF :: (Ord c, Group c, Unital c, Propositional c) => c -> Set (Set c)
+toSetsDNF :: (Ord c, Group c, Monoidal c, Unital c, Propositional c) => c -> Set (Set c)
 toSetsDNF d = fromList
   [ x
   | r <- fromList . conjunctions <$> disjunctions d
@@ -89,7 +91,9 @@ toSetsDNF d = fromList
   ]
 
 -- | O(ms)
-fromSetsDNF :: (Ord c, Group c, Unital c) => Set (Set c) -> c
+fromSetsDNF
+  :: (Ord c, Group c, Monoidal c, Unital c, Additive c, Multiplicative c)
+  => Set (Set c) -> c
 fromSetsDNF s | s == singleton mempty || s == singleton (singleton one) = one
 fromSetsDNF s | not $ List.null xs = foldr1 (+) $ foldr1 (*) <$> xs
   where xs = [x | x <- elems $ singleton one `delete` s, size x > 0]
@@ -120,11 +124,11 @@ absorb s = Set.filter $ \a -> not $ any (`isProperSubsetOf` a) s
 eliminate :: Ord c => Set (Set c) -> Set (Set c) -> Set (Set c)
 eliminate  _ rs | size rs <= 1 = rs
 eliminate ms rs
-  | size ms <= 0x100000 * wordSize
-  , size rs <= 0x100000 * wordSize
+  | size ms <= 0x100000 Num.* wordSize
+  , size rs <= 0x100000 Num.* wordSize
   = fromDistinctAscList [r | (i, r) <- [0..] `zip` toAscList rs, unsafeIndex v i /= zeroBits]
   where BitMatrix _ v = columns $ primeTermTable ms rs
-eliminate ms rs | size ms > (0x100000 * wordSize) || size ms > size rs = rs
+eliminate ms rs | size ms > (Num.*) 0x100000 wordSize || size ms > size rs = rs
 eliminate ms  _ = ms
 
 -- | O(ms*rs)

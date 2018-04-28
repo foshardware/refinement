@@ -23,5 +23,5 @@ library
     FlexibleContexts
   ghc-options:        -Wall -O2 -fno-warn-unused-do-bind -funbox-strict-fields
   build-depends:      base >=4.8, transformers, pointed, semigroupoids,
-                      containers, semigroups, algebra >=4.2, vector, text
+                      containers, semigroups, vector, text
   default-language:    Haskell2010

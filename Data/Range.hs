@@ -4,9 +4,9 @@ module Data.Range where
 
 import Data.Pointed
 import Data.Semigroup
-import Numeric.Algebra hiding ((>))
-import Prelude hiding ((+), (*), (-))
+import Prelude hiding ((+), (*))
 
+import Control.Monad.Refinement.Class
 
 data Range a = Range !a !a | Ranges [Range a] | Nil
   deriving Eq
@@ -18,14 +18,14 @@ instance Functor Range where
 
 instance Pointed Range where point a = Range a a
 
-instance (Group a, Ord a) => Additive (Range a) where
+instance Ord a => Additive (Range a) where
   Range i0 i1 + Range j0 j1 = normalize $ Range (max i0 j0) (min i1 j1)
   i@(Range  _ _) + Ranges rs = normalize $ Ranges [i + r | r <- rs]
   r@(Ranges _) + i@(Range _ _) = i + r
   Ranges rs + Ranges ss = normalize $ Ranges [r + s | r <- rs, s <- ss]
   _ + _ = Nil
 
-instance (Group a, Ord a) => Multiplicative (Range a) where
+instance Ord a => Multiplicative (Range a) where
   i@(Range _ _)  * j@(Range _ _) = normalize $ Ranges [i, j]
   i@(Range  _ _) * Ranges rs = normalize . Ranges $ i : rs
   r@(Ranges _) * i@(Range _ _) = i * r
@@ -33,16 +33,7 @@ instance (Group a, Ord a) => Multiplicative (Range a) where
   Nil * x = x
   x * Nil = x
 
-instance (Group a, Ord a, RightModule Natural a) => RightModule Natural (Range a) where
-  Range a b *. n = Range (a *. n) (b *. n)
-  Ranges rs *. n = Ranges $ fmap (*. n) rs
-  Nil *. _ = Nil
-instance (Group a, Ord a, LeftModule Natural a) => LeftModule Natural (Range a) where
-  n .* Range a b = Range (n .* a) (n .* b)
-  n .* Ranges rs = Ranges $ fmap (n .*) rs
-  _ .* Nil = Nil
-
-instance (Group a, Ord a, Bounded a) => Monoidal (Range a) where
+instance (Ord a, Bounded a) => Monoidal (Range a) where
   zero = Range minBound maxBound
 
 instance (Group a, Ord a) => Semigroup (Range a) where (<>) = (+)
@@ -50,8 +41,8 @@ instance (Group a, Ord a, Bounded a) => Monoid (Range a) where
   mappend = (<>)
   mempty = zero
 
-instance (Ord a, Group a) => Ord (Range a) where
-  Range i0 i1 <= Range j0 j1 | i0 == j0 = i1 - i0 <= j1 - j0
+instance Ord a => Ord (Range a) where
+  Range i0 i1 <= Range j0 j1 | i0 == j0 = i1 <= j1
   Range i0  _ <= Range j0  _ = i0 <= j0
   Range _ _ <= Ranges _ = True
   Ranges _ <= Range _ _ = False
@@ -64,7 +55,7 @@ valid (Range a b) = a <= b
 valid (Ranges rs) = or $ valid <$> rs
 valid Nil = False
 
-normalize :: (Ord a, Group a) => Range a -> Range a
+normalize :: Ord a => Range a -> Range a
 normalize Nil = Nil
 normalize r@(Range _ _) | valid r = r
 normalize   (Range _ _) = Nil
@@ -78,7 +69,7 @@ normalize  (Ranges  rs) = unwind . filter valid . normalizeList $ normalize <$> 
 
 -- | A smart mergesort that joins and drops elements appropriately
 -- effectively normalizing a list of `Ranges`
-normalizeList :: (Ord a, Group a) => [Range a] -> [Range a]
+normalizeList :: Ord a => [Range a] -> [Range a]
 normalizeList = mergeAll . sequences
   where
     sequences (r@(Range i0 i1) : s@(Range j0 j1) : xs)
@@ -131,7 +122,7 @@ isSubsetOf   _ Nil = False
 isSubsetOf   _   _ = error "isSubsetOf not implemented for higher-order ranges"
 
 
-instance (Bounded a, Eq a, Ord a, Group a, Show a) => Show (Range a) where
+instance (Bounded a, Eq a, Ord a, Show a) => Show (Range a) where
   show Nil = "invalid"
   show (Range a b) | Range a b == zero = "open"
   show (Range a b) | b == maxBound = show a ++"..open"
