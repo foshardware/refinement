@@ -3,6 +3,9 @@
 module XC70 where
 
 import Refinement
+import Control.Monad.Refinement.CNF
+import Control.Monad.Trans.Maybe
+import Control.Monad.Trans.State
 import Data.Foldable (forM_)
 import Prelude hiding (product, (+), (*))
 import qualified Prelude as Num
