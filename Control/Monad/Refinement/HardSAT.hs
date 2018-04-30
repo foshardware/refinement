@@ -9,7 +9,6 @@ import Data.Set (Set, member, union, foldl')
 import Data.Array.ST
 import Data.Array.IArray
 import Data.STRef
-import Data.Vector.Unboxed as Vector (Vector)
 import qualified Data.Vector as Boxed
 import qualified Data.Vector as V
 import Control.Monad
@@ -124,7 +123,7 @@ sp (f, tmax, e) = do
 convergence :: (Formula s, Int, Double) -> SP s (Convergence, (FactorGraph s, Int))
 convergence (f', tmax, e) = do
 
-  f'@(Factor graph@(_, _, edges)) <- convert (f', tmax)
+  g@(Factor graph@(_, _, edges)) <- convert (f', tmax)
 
   c' <- newRef Unconverged
   s' <- newRef (error "UNCONVERGED", 0)
@@ -136,20 +135,20 @@ convergence (f', tmax, e) = do
   forM_ [1..tmax] $ \t -> do
 
     c <- readRef c'
-    unless (c == Converged) $ forM_ edges $ \ (fun, var, (bunsat, bsat, bstar), survey) -> do
+    unless (c == Converged) $ forM_ edges $ \ (fun, var, (bunsat, bsat, bstar), _) -> do
 
       -- warnings
       nowarnUnsat <- sequence $ join
            [ [(1-) <$> ix survey (t - 1) | (_, _, _, survey) <- neighbours]
-           | Fun _ neighbours _ <- unsat f' var fun
+           | Fun _ neighbours _ <- unsat g var fun
            ]
       nowarnSat <- sequence $ join
            [ [(1-) <$> ix survey (t - 1) | (_, _, _, survey) <- neighbours]
-           | Fun _ neighbours _ <- sat f' var fun
+           | Fun _ neighbours _ <- sat g var fun
            ]
       nowarn <- sequence $ join
            [ [(1-) <$> ix survey (t - 1) | (_, _, _, survey) <- neighbours]
-           | Fun _ neighbours _ <- nextFuns f' var fun
+           | Fun _ neighbours _ <- nextFuns g var fun
            ]
       -- set belief for unsat 
       write bunsat t $ product nowarnSat * (1 - product nowarnUnsat)
@@ -164,7 +163,7 @@ convergence (f', tmax, e) = do
       result <- sequence $ join
            [ [ (/) <$> ix bu t <*> (sum <$> sequence [ix bu t, ix ba t, ix bs t])
              | (_, _, (bu, ba, bs), _) <- neighbours ]
-           | Var _ neighbours _ <- nextVars f' fun var
+           | Var _ neighbours _ <- nextVars g fun var
            ]
       write survey t $ product result
 
@@ -183,7 +182,7 @@ convergence (f', tmax, e) = do
 -- | Assignment
 --
 assignment :: (FactorGraph s, Int) -> SP s Assignment
-assignment (f'@(Factor (vars, _, _)), t) = do
+assignment (g@(Factor (vars, _, _)), t) = do
 
   -- accumulation
   d' <- newRef 0
@@ -197,15 +196,15 @@ assignment (f'@(Factor (vars, _, _)), t) = do
 
       nowarnPositive <- sequence $ join
            [ [(1-) <$> ix survey t | (_, _, _, survey) <- neighbours]
-           | Fun _ neighbours _ <- positive f' var
+           | Fun _ neighbours _ <- positive g var
            ]
       nowarnNegative <- sequence $ join
            [ [(1-) <$> ix survey t | (_, _, _, survey) <- neighbours]
-           | Fun _ neighbours _ <- negative f' var
+           | Fun _ neighbours _ <- negative g var
            ]
       nowarn <- sequence $ join
            [ [(1-) <$> ix survey t | (_, _, _, survey) <- neighbours]
-           | Fun _ neighbours _ <- allFuns f' var
+           | Fun _ neighbours _ <- allFuns g var
            ]
 
       let pplus  = (1 - product nowarnPositive) * product nowarnNegative
@@ -237,12 +236,12 @@ assignment (f'@(Factor (vars, _, _)), t) = do
 -- return all positive nodes when `i` is positive in `a` otherwise return all negative nodes
 -- except `a` itself
 sat :: FactorGraph s -> VarNode s -> FunNode s -> [FunNode s]
-sat f' var@(Var i _ _) a@(Fun _ _ v)
+sat g var@(Var i _ _) a@(Fun _ _ v)
   | v V.! i == 1
-  = filter (/= a) $ positive f' var
-sat f' var@(Var i _ _) a@(Fun _ _ v)
+  = filter (/= a) $ positive g var
+sat g var@(Var i _ _) a@(Fun _ _ v)
   | v V.! i == -1
-  = filter (/= a) $ negative f' var
+  = filter (/= a) $ negative g var
 sat _ _ _ = []
 
 -- return all neighbouring function nodes with positive polarity in `i`
@@ -253,12 +252,12 @@ positive (Factor (_, funs, _)) (Var i edges _)
 -- return all negative nodes when `i` is positive in `a` otherwise return all positive nodes
 -- except `a` itself
 unsat :: FactorGraph s -> VarNode s -> FunNode s -> [FunNode s]
-unsat f' var@(Var i _ _) a@(Fun _ _ v)
+unsat g var@(Var i _ _) a@(Fun _ _ v)
   | v V.! i == 1
-  = filter (/= a) $ negative f' var
-unsat f' var@(Var i _ _) a@(Fun _ _ v)
+  = filter (/= a) $ negative g var
+unsat g var@(Var i _ _) a@(Fun _ _ v)
   | v V.! i == -1
-  = filter (/= a) $ positive f' var
+  = filter (/= a) $ positive g var
 unsat _ _ _ = [] 
 
 -- return all neighbouring function nodes with negative polarity in `i`
@@ -268,8 +267,8 @@ negative (Factor (_, funs, _)) (Var i edges _)
 
 -- returns all neighbouring variable nodes except `i`
 nextVars :: FactorGraph s -> FunNode s -> VarNode s -> [VarNode s]
-nextVars f' fun i
-  = filter (/= i) $ allVars f' fun
+nextVars g fun i
+  = filter (/= i) $ allVars g fun
 
 -- returns all neighbouring variable nodes
 allVars :: FactorGraph s -> FunNode s -> [VarNode s]
@@ -283,8 +282,8 @@ allFuns (Factor (_, funs, _)) (Var _ edges _)
 
 -- return all neighbouring function nodes except `a`
 nextFuns :: FactorGraph s -> VarNode s -> FunNode s -> [FunNode s]
-nextFuns f' var a
-  = filter (/= a) $ allFuns f' var
+nextFuns g var a
+  = filter (/= a) $ allFuns g var
 
 
 -- | Decimation
@@ -311,9 +310,9 @@ convert (f', tmax) = do
   let vars = [(i, Var i unn $ V.cons une $ getCol i f) | i <- [1..ncols f], notElem i rvars]
       funs = [(a, Fun a unn $ V.cons une $ getRow a f) | a <- [1..nrows f], notElem a rfuns]
   
-  let init = lift $ newArray (0, tmax) 0
-      initSurvey = init
-      initBeliefs = (,,) <$> init <*> init <*> init
+  let arr = lift $ newArray (0, tmax) 0
+      initSurvey = arr
+      initBeliefs = (,,) <$> arr <*> arr <*> arr
 
   edges <- sequence
       [ (,,,) <$> pure fun <*> pure var <*> initBeliefs <*> initSurvey
@@ -349,8 +348,8 @@ toFormula ::
 toFormula cnf = fromLists [polarities term | term <- Set.toList cnf]
   where
     polarities s = [member v s `polarity` member (negate v) s | v <- Set.toList variables]
-    variables = foldl' ( \ b a -> union b $ Set.map positive a) Set.empty cnf
-    positive c = maybe c id $ negation c 
+    variables = foldl' ( \ b a -> union b $ Set.map pos a) Set.empty cnf
+    pos c = maybe c id $ negation c
     polarity True False = 1
     polarity False True = -1
     polarity _ _ = 0
