@@ -16,9 +16,9 @@ import Control.Monad
 import Control.Monad.Refinement.Class hiding ((*), (+), product)
 import Control.Monad.ST
 import Control.Monad.Trans.Class
-import Control.Monad.Trans.Reader
+import Control.Monad.Trans.State
 import Prelude as List hiding (negate)
-import System.Random
+import System.Random.Mersenne
 
 
 type Assignment = (Bool, Int)
@@ -33,7 +33,9 @@ type Formula s = STRef s (Matrix Int, [Int], [Int])
  
 -- | Effectful survey propagation through strict state and access to random numbers
 --
-type SP s = ReaderT StdGen (ST s)
+type SP s = StateT Seed (ST s)
+
+type Seed = [Double]
 
 
 type Survey s = STUArray s Int Double
@@ -60,13 +62,24 @@ instance Eq (FunNode s) where
   Fun a _ _ == Fun b _ _ = b == a
 
 
+
 -- | User interface
 --
+--  `evalSP` uses an infinite list of random numbers:
+--  IO effects are interleaved in the evaluation of that list
+--
+--  Use `evalSPWithSeed` to seperate pure code.
+--
 evalSP :: Matrix Int -> Int -> Double -> IO [Assignment]
-evalSP f tmax e = evalSPWithGen <$> getStdGen <*> pure f <*> pure tmax <*> pure e
+evalSP f tmax e
+  = evalSPWithSeed
+      <$> (randoms =<< getStdGen)
+      <*> pure f
+      <*> pure tmax
+      <*> pure e
 
-evalSPWithGen :: StdGen -> Matrix Int -> Int -> Double -> [Assignment]
-evalSPWithGen g f tmax e = runST $ runReaderT (sp (f, tmax, e)) g
+evalSPWithSeed :: Seed -> Matrix Int -> Int -> Double -> [Assignment]
+evalSPWithSeed g f tmax e = runST $ evalStateT (sp (f, tmax, e)) g
 
 -- | Lifted utility
 --
@@ -116,15 +129,9 @@ convergence (f', tmax, e) = do
   c' <- newRef Unconverged
   s' <- newRef (error "UNCONVERGED", 0)
 
-  gen <- ask
-  let (g1, g2) = split gen
-      (gen1, gen2) = split g1
-      (gen3, gen4) = split g2
-       
-  mapM_ ( \ (rnd, (_, _, _, survey)) -> write survey 0 rnd) (randomRs (0, 1) gen1 `zip` edges)
-  mapM_ ( \ (rnd, (_, _, (bl, _, _), _)) -> write bl 1 rnd) (randomRs (0, 1) gen2 `zip` edges)
-  mapM_ ( \ (rnd, (_, _, (_, bl, _), _)) -> write bl 1 rnd) (randomRs (0, 1) gen3 `zip` edges)
-  mapM_ ( \ (rnd, (_, _, (_, _, bl), _)) -> write bl 1 rnd) (randomRs (0, 1) gen4 `zip` edges)
+  (numbers, gen) <- splitAt (length edges) <$> get
+  mapM_ ( \ (rnd, (_, _, _, survey)) -> write survey 0 rnd) (zip numbers edges)
+  put gen
 
   forM_ [1..tmax] $ \t -> do
 
