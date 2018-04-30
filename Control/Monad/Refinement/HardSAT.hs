@@ -15,7 +15,7 @@ import Control.Monad
 import Control.Monad.Refinement.Class hiding ((*), (+), product)
 import Control.Monad.ST
 import Control.Monad.Trans.Class
-import Control.Monad.Trans.State
+import Control.Monad.Trans.State.Strict
 import Prelude as List hiding (negate)
 import System.Random.Mersenne
 
