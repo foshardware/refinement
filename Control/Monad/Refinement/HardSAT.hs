@@ -1,4 +1,4 @@
-{-# LANGUAGE TupleSections, FlexibleContexts #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Control.Monad.Refinement.HardSAT where
 
@@ -8,6 +8,7 @@ import qualified Data.Set as Set
 import Data.Set (Set, member, union, foldl')
 import Data.Array.ST
 import Data.Array.IArray
+import Data.Array.MArray()
 import Data.STRef
 import qualified Data.Vector as Boxed
 import qualified Data.Vector as V
@@ -94,25 +95,46 @@ writeRef r = lift . writeSTRef r
 modifyRef :: STRef s a -> (a -> a) -> SP s ()
 modifyRef r = lift . modifySTRef r
 
-ix :: (MArray a e (ST s), Ix i) => a i e -> i -> SP s e
+ix :: STUArray s Int Double -> Int -> SP s Double
 ix a = lift . readArray a
 
-write :: (MArray a e (ST s), Ix i) => a i e -> i -> e -> SP s ()
+write :: STUArray s Int Double -> Int -> Double -> SP s ()
 write a i = lift . writeArray a i
 
 -- | Survey propagation
 --
 sp :: (Matrix Int, Int, Double) -> SP s [Assignment]
 sp (f, tmax, e) = do
+
+  -- copy of sat matrix
   f' <- newRef (f, [], [])
-  fmap join $ sequence $ replicate (ncols f) $ do
-      (c, (s, t)) <- convergence (f', tmax, e)
-      if c == Unconverged
-        then pure []
-        else do
-          (v, i) <- assignment (s, t)
-          decimation (f', v, i)
-          pure [(v, i)]
+  -- cancel computation when this references to `Unconverged`
+  c' <- newRef Converged
+
+  -- assignment vector
+  a' <- newRef []
+
+  -- iterate through all columns
+  sequence_ $ replicate (ncols f) $ do
+
+    c <- readRef c'
+    unless (c == Unconverged) $ do
+
+      (d, (s, t)) <- convergence (f', tmax, e)
+
+      -- break when `Unconverged` is returned
+      writeRef c' d
+
+      when (d == Converged) $ do
+
+         (v, i) <- assignment (s, t)
+         modifyRef a' ((v, i) :)
+
+         decimation (f', v, i)
+
+  -- return assignment vector
+  readRef a'
+
 
 -- | Convergence
 --
@@ -139,21 +161,24 @@ convergence (f', tmax, e) = do
 
       -- warnings
       nowarnUnsat <- sequence $ join
-           [ [(1-) <$> ix survey (t - 1) | (_, _, _, survey) <- neighbours]
+           [ [ (1-) <$> ix survey (t - 1) | (_, _, _, survey) <- neighbours]
            | Fun _ neighbours _ <- unsat g var fun
            ]
       nowarnSat <- sequence $ join
-           [ [(1-) <$> ix survey (t - 1) | (_, _, _, survey) <- neighbours]
+           [ [ (1-) <$> ix survey (t - 1) | (_, _, _, survey) <- neighbours]
            | Fun _ neighbours _ <- sat g var fun
            ]
       nowarn <- sequence $ join
-           [ [(1-) <$> ix survey (t - 1) | (_, _, _, survey) <- neighbours]
+           [ [ (1-) <$> ix survey (t - 1) | (_, _, _, survey) <- neighbours]
            | Fun _ neighbours _ <- nextFuns g var fun
            ]
+
       -- set belief for unsat 
       write bunsat t $ product nowarnSat * (1 - product nowarnUnsat)
+
       -- set belief for sat
       write bsat t $ product nowarnUnsat * (1 - product nowarnSat)
+
       -- set belief for unconstrained
       write bstar t $ product nowarn
 
@@ -297,6 +322,7 @@ decimation (f', b, i) = writeRef f' . delete =<< readRef f'
       , let v = getRow a f
       , b && v V.! (i - 1) == 1 || v V.! (i - 1) == -1
       ]
+
 
 -- | Factor graph conversion
 --
