@@ -2,11 +2,12 @@
 module Control.Monad.Refinement where
 
 import Control.Applicative
-import Control.Monad
+import Control.Monad hiding (fail)
+import Control.Monad.Fail
 import Control.Monad.IO.Class
 import Control.Monad.Refinement.Class
 import Control.Monad.Refinement.DNF
-import Control.Monad.Trans.Class 
+import Control.Monad.Trans.Class
 import Data.Copointed
 import Data.Functor.Alt (Alt(..))
 import Data.Functor.Bind (Bind(..))
@@ -20,7 +21,7 @@ import qualified Data.IntMap as I
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Semigroup
-import Prelude hiding ((+), (*), negate, minimum, maximum, lookup)
+import Prelude hiding ((+), (*), negate, minimum, maximum, lookup, fail)
 
 -- | To map a category of unrefined products to a category of refined products:
 -- Rules have effects on such a refinement
@@ -113,7 +114,7 @@ constraintDNF
 constraintDNF c p | Just (a, b) <- disjunction c = constraintDNF a p >> constraintDNF b p
 constraintDNF c p = do
   i <- ruleCount
-  j:_ <- (++[i]) . I.keys . I.filter criteria <$> ruleSet c
+  j <- head . (++[i]) . I.keys . I.filter criteria <$> ruleSet c
   addRule $ fromList [(letter d, I.singleton j (MinTerm distinct, p)) | d <- conjunctions c]
   where
     distinct = Set.fromList $ conjunctions c
@@ -169,6 +170,9 @@ instance (Monad m, Plus m) => MonadPlus (RefinementT p c m) where
   mzero = Plus.zero
   mplus = (<!>)
 
+instance MonadFail m => MonadFail (RefinementT p c m) where
+  fail = RefinementT . const . fail
+
 instance MonadTrans (RefinementT p c) where
   lift m = RefinementT $ \s -> do
     a <- m
@@ -176,10 +180,3 @@ instance MonadTrans (RefinementT p c) where
 
 instance (MonadIO m) => MonadIO (RefinementT p c m) where
   liftIO = lift . liftIO
-
--- | Print the internals of RefinementT to stdout
-showRuleSet :: (Copointed m, Ord c, Show c, Show p) => RefinementT p c m () -> IO () 
-showRuleSet (RefinementT s) = putStr $
-  showTreeWith showElem False True . snd . snd . copoint $ s (0, mempty)
-  where showElem k a = show k ++" := "++ show a
-

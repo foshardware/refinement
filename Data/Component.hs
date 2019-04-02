@@ -66,6 +66,9 @@ instance Quantifiable Component where
   a >. n  = GreaterThan a n
   a <. n  = LessThan a n
 
+  a =. n  = Equals a n
+
+
 instance Letter Component where
   letter c | Just (a,_) <- conjunction c = letter a
   letter c | Just (a,_) <- disjunction c = letter a

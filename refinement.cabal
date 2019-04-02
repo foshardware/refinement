@@ -9,7 +9,6 @@ cabal-version:       >=1.10
 library
   exposed-modules:
     Control.Monad.Refinement,
-    Control.Monad.Refinement.Orphans,
     Control.Monad.Refinement.Combinators,
     Control.Monad.Refinement.Class,
     Control.Monad.Refinement.CNF,
@@ -24,7 +23,16 @@ library
     TypeSynonymInstances,
     FlexibleContexts
   ghc-options:        -Wall -O2 -fno-warn-unused-do-bind -funbox-strict-fields
-  build-depends:      base >=4.8, transformers, pointed, semigroupoids,
-                      containers, semigroups, vector, matrix, text, mersenne-random,
-                      monad-loops
+  build-depends:      base >=4.8
+                    , array
+                    , containers
+                    , matrix
+                    , mersenne-random
+                    , monad-loops
+                    , pointed
+                    , semigroupoids
+                    , semigroups
+                    , text
+                    , transformers
+                    , vector
   default-language:    Haskell2010
