@@ -2,4 +2,7 @@ resolver: lts-13.15
 packages:
 - .
 extra-deps:
+- git: https://github.com/foshardware/truthtable
+  commit: e49a4c4dd9470e81981a0bd3f690f16d69f1d069
 - mersenne-random-1.0.0.1@sha256:c2c7c88765030e4a6003e921e7676858a048f75bc2f38d58ddafd3b102be6d82
+

@@ -22,6 +22,7 @@ import Prelude as List hiding ((+), (*), negate, length)
 import qualified Prelude as Num 
 
 import Data.BitMatrix
+import Data.BitVector
 
 
 toDNF = t
